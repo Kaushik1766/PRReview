@@ -3,14 +3,15 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
-	"os"
 
 	"Kaushik1766/PRReview/internal/handlers/webhooks/pr"
 	pranalysis "Kaushik1766/PRReview/internal/services/pr-analysis"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/google/go-github/github"
-	"google.golang.org/genai"
 )
 
 type App struct {
@@ -22,23 +23,17 @@ type App struct {
 }
 
 func NewApp() (*App, error) {
-
 	app := App{}
 
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY not set")
-	}
-	aiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
+	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AI client: %w", err)
+		log.Fatalf("failed to load AWS config: %v", err)
 	}
 
+	client := bedrockruntime.NewFromConfig(cfg)
+
 	githubClient := github.NewClient(nil)
-	prAnalyzer, err := pranalysis.NewPRAnalysis(aiClient)
+	prAnalyzer, err := pranalysis.NewPRAnalysis(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR analyzer: %w", err)
 	}

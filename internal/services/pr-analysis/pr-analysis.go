@@ -4,20 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"Kaushik1766/PRReview/internal/models"
-	"Kaushik1766/PRReview/utils"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/google/go-github/github"
-	"google.golang.org/genai"
 )
 
 type PRAnalysis struct {
-	aiClient *genai.Client
+	aiClient *bedrockruntime.Client
 }
 
-func NewPRAnalysis(aiClient *genai.Client) (*PRAnalysis, error) {
+func NewPRAnalysis(aiClient *bedrockruntime.Client) (*PRAnalysis, error) {
 	return &PRAnalysis{
 		aiClient: aiClient,
 	}, nil
@@ -56,22 +57,44 @@ func (service PRAnalysis) AnalyzePR(comp *github.CommitsComparison, ctx context.
 		%s
 	`, strings.Join(diffs, "\n\n"))
 
-	resp, err := service.aiClient.Models.GenerateContent(context.Background(), "gemini-2.0-flash", []*genai.Content{
-		{Parts: []*genai.Part{{Text: prompt}}},
-	}, nil)
+	payload := map[string]interface{}{
+		"anthropic_version": "bedrock-2023-05-31",
+		"max_tokens":        2048,
+		"messages": []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Fatalf("failed to marshal payload: %v", err)
+	}
+	resp, err := service.
+		aiClient.
+		InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
+			ModelId:     aws.String("global.anthropic.claude-sonnet-4-5-20250929-v]byte(prompt),1:0"),
+			ContentType: aws.String("application/json"),
+			Body:        body,
+		})
 	if err != nil {
 		return models.CommitAnalysis{}, fmt.Errorf("failed to generate content: %w", err)
 	}
 
+	fmt.Println(string(resp.Body))
+
 	// fmt.Println(resp.Text())
 
-	var analysis []models.FileAnalysis
-	if err := json.Unmarshal([]byte(resp.Text()[7:len(resp.Text())-3]), &analysis); err != nil {
-		return models.CommitAnalysis{}, fmt.Errorf("failed to parse model output: %w", err)
-	}
+	// var analysis []models.FileAnalysis
+	// if err := json.Unmarshal([]byte(resp.Text()[7:len(resp.Text())-3]), &analysis); err != nil {
+	// 	return models.CommitAnalysis{}, fmt.Errorf("failed to parse model output: %w", err)
+	// }
 
-	for _, val := range analysis {
-		utils.PrettyPrint(val)
-	}
+	// for _, val := range analysis {
+	// 	utils.PrettyPrint(val)
+	// }
+	// return models.CommitAnalysis{}, nil
 	return models.CommitAnalysis{}, nil
 }
