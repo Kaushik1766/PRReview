@@ -45,11 +45,11 @@ func (service PRAnalysis) AnalyzePR(comp *github.CommitsComparison, ctx context.
 		Return your answer strictly in JSON format:
 		[
 			{
-				"file": "<filename>",
+				"filename": "<filename>",
 				"summary": "<short summary of what changed>",
 				"issues": ["<issue 1>", "<issue 2>", ...],
 				"suggestions": ["<suggestion 1>", "<suggestion 2>", ...],
-				"rating": <1-5 integer>
+				"severity": <1-5 integer>
 			}
 		]
 
@@ -57,10 +57,11 @@ func (service PRAnalysis) AnalyzePR(comp *github.CommitsComparison, ctx context.
 		%s
 	`, strings.Join(diffs, "\n\n"))
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"anthropic_version": "bedrock-2023-05-31",
 		"max_tokens":        2048,
-		"messages": []map[string]interface{}{
+		"system":            "dont give ```json ``` in your output text",
+		"messages": []map[string]any{
 			{
 				"role":    "user",
 				"content": prompt,
@@ -75,26 +76,33 @@ func (service PRAnalysis) AnalyzePR(comp *github.CommitsComparison, ctx context.
 	resp, err := service.
 		aiClient.
 		InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
-			ModelId:     aws.String("global.anthropic.claude-sonnet-4-5-20250929-v]byte(prompt),1:0"),
+			ModelId:     aws.String("arn:aws:bedrock:ap-south-1:513758042129:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"),
 			ContentType: aws.String("application/json"),
+			Accept:      aws.String("application/json"),
 			Body:        body,
 		})
 	if err != nil {
 		return models.CommitAnalysis{}, fmt.Errorf("failed to generate content: %w", err)
 	}
 
-	fmt.Println(string(resp.Body))
+	// fmt.Println(string(resp.Body))
 
 	// fmt.Println(resp.Text())
 
-	// var analysis []models.FileAnalysis
-	// if err := json.Unmarshal([]byte(resp.Text()[7:len(resp.Text())-3]), &analysis); err != nil {
-	// 	return models.CommitAnalysis{}, fmt.Errorf("failed to parse model output: %w", err)
-	// }
+	var response models.Message
+	if err := json.Unmarshal(resp.Body, &response); err != nil {
+		return models.CommitAnalysis{}, fmt.Errorf("failed to parse model output: %w", err)
+	}
+
+	var analysis []models.FileAnalysis
+	if err := json.Unmarshal([]byte(response.Content[0].Text[7:len(response.Content[0].Text)-3]), &analysis); err != nil {
+		return models.CommitAnalysis{}, fmt.Errorf("failed to parse model output: %w", err)
+	}
 
 	// for _, val := range analysis {
 	// 	utils.PrettyPrint(val)
 	// }
-	// return models.CommitAnalysis{}, nil
-	return models.CommitAnalysis{}, nil
+	return models.CommitAnalysis{
+		Files: analysis,
+	}, nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	pranalysis "Kaushik1766/PRReview/internal/services/pr-analysis"
+	"Kaushik1766/PRReview/utils"
 
 	"github.com/google/go-github/github"
 )
@@ -48,7 +49,7 @@ func (handler *PRHandler) GetPREvent(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println(analysis)
+		utils.PrettyPrint(analysis)
 
 	default:
 		fmt.Println("event not valid")
